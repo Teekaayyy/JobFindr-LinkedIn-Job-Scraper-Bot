@@ -210,6 +210,5 @@ Pull requests are welcome. For major changes, please open an issue first.
 
 ---
 
-## 📄 License
+*Built by Jessica Dan-Odhomo - [LinkedIn](https://www.linkedin.com/in/jessica-dan-odhomo) - [GitHub](https://github.com/Teekaayyy)*
 
-MIT
