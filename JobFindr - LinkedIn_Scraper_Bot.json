@@ -1,0 +1,650 @@
+{
+  "name": "JobFindr - LinkedIn Scraper Bot",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message",
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "id": "8f31bfb5-316e-4c46-8a27-e695e3a3c50e",
+      "name": "📩 Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -112,
+        688
+      ],
+      "webhookId": "3d8f6b16-d1a8-469f-ac5a-140e76c73b72",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "JobFindr Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "check-not-skip",
+              "leftValue": "={{ $json.skip }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "check-text-not-empty",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        336,
+        688
+      ],
+      "id": "b1d079f1-b1cf-459b-bd86-4582fbaa791f",
+      "name": "🔀 Valid Message?"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Send message to Telegram with optional inline keyboard\n// Uses this.helpers.httpRequest so reply_markup stays a proper\n// nested object — not a stringified string inside JSON.\nconst d = $('🧠 Master Handler').item.json;\nconst BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN';\n\nif (!d.chatId || !d.text) {\n  return [{ json: { skipped: true } }];\n}\n\nconst body = {\n  chat_id: String(d.chatId),\n  text: d.text\n};\n\n// Only add reply_markup if there is actually a keyboard\nif (d.keyboard && d.keyboard.inline_keyboard && d.keyboard.inline_keyboard.length > 0) {\n  body.reply_markup = d.keyboard;\n}\n\nconst response = await this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n  body,\n  json: true\n});\n\nreturn [{ json: { ok: true, messageId: response.result?.message_id } }];"
+      },
+      "id": "a7fd378e-542a-4238-b8af-c44f0fdabbd5",
+      "name": "📤 Send Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "cb-not-empty",
+              "leftValue": "={{ $('🧠 Master Handler').item.json.callbackQueryId }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        560,
+        592
+      ],
+      "id": "dcab7b5b-5fd1-4fa4-a4f1-b617250d4c31",
+      "name": "🔀 Is Callback?"
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $('🧠 Master Handler').item.json.callbackQueryId }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        784,
+        592
+      ],
+      "id": "ea6de2f6-a1f9-406d-8bbe-bbdc59115a2e",
+      "name": "✅ Answer Callback",
+      "webhookId": "0ae8a2b2-3a10-4196-a989-402a01e28758",
+      "credentials": {
+        "telegramApi": {
+          "id": "YOUR_TELEGRAM_CREDENTIAL_ID",
+          "name": "JobFindr Bot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "const BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN';\nconst d = $json;\n\nconsole.log('Notifying chatId:', d.chatId);\nconsole.log('resultCount:', d.resultCount);\n\n// First send a plain text message with no special characters\nconst text = 'Great news! I found ' + d.resultCount + ' jobs for you on LinkedIn.\\n\\nHow would you like your results?';\n\n// Send the message\nlet response;\ntry {\n  response = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n    body: {\n      chat_id: String(d.chatId),\n      text: text,\n      reply_markup: {\n        inline_keyboard: [\n          [{ text: 'Excel Spreadsheet (.xlsx)', callback_data: 'DEL~excel' }],\n          [{ text: 'Text Summary in Chat',      callback_data: 'DEL~text'  }],\n          [{ text: 'Both (Preview + Excel)',    callback_data: 'DEL~both'  }]\n        ]\n      }\n    },\n    json: true\n  });\n} catch(e) {\n  console.log('First attempt failed:', e.message);\n  \n  // Fallback — send with no keyboard at all\n  response = await this.helpers.httpRequest({\n    method: 'POST',\n    url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n    body: {\n      chat_id: String(d.chatId),\n      text: 'Your results are ready. Found ' + d.resultCount + ' jobs. Reply with excel, text, or both to get your results.'\n    },\n    json: true\n  });\n}\n\nconsole.log('Telegram response:', JSON.stringify(response));\n\nreturn [{ json: { sent: true, chatId: d.chatId, resultCount: d.resultCount } }];"
+      },
+      "id": "50bffd51-ad4a-4831-bb52-d0595c3851e5",
+      "name": "🎉 Notify — Results Ready",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        1392
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "start-apify-check",
+              "leftValue": "={{ $json.startApify }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b42f2670-38a7-498c-b9f1-f46578fdf071",
+      "name": "🔀 Start Apify?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        560,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $json.apifyPayload;\n\nconst apifyInput = {\n  keyword: [p.jobRole],\n  location: p.location,\n  publishedAt: 'r2592000',\n  enrichCompanyData: false,\n  saveOnlyUniqueItems: true\n};\n\nconst webhookCfg = [{\n  eventTypes: ['ACTOR.RUN.SUCCEEDED', 'ACTOR.RUN.FAILED'],\n  requestUrl: 'https://YOUR_N8N_SUBDOMAIN.app.n8n.cloud/webhook/jobfindr-apify-done?chatId=' + p.chatId\n}];\n\nconst encoded = Buffer.from(JSON.stringify(webhookCfg)).toString('base64');\n\nreturn [{ json: {\n  ...$json,\n  apifyInput,\n  apifyUrl: 'https://api.apify.com/v2/acts/cheap_scraper~linkedin-job-scraper/runs?token=YOUR_APIFY_API_TOKEN&webhooks=' + encoded\n} }];"
+      },
+      "id": "6359303f-9536-40e9-9b91-66c639c2c41e",
+      "name": "📋 Prepare Apify Input1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.apifyUrl }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.apifyInput) }}",
+        "options": {}
+      },
+      "id": "2e557423-d1a1-4ed4-97cf-ef834ce6369c",
+      "name": "🚀 Start Apify Run1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1008,
+        784
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "send-file-check",
+              "leftValue": "={{ $json.sendFile }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "9e4c4966-4e47-462c-8633-4c0fe064a515",
+      "name": "🔀 Send File?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        560,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const masterData = $('🧠 Master Handler').item.json;\nconst results = masterData.results || [];\n\nif (results.length === 0) {\n  return [{ json: { error: 'No results', chatId: masterData.chatId } }];\n}\n\nconst rows = results.map((job, i) => ({\n  '#':               i + 1,\n  'Job Title':       job.title           || 'N/A',\n  'Company':         job.company         || 'N/A',\n  'Location':        job.location        || 'N/A',\n  'Contract Type':   job.employmentType  || 'N/A',\n  'Work Type':       job.workType        || 'N/A',\n  'Experience':      job.experienceLevel || 'N/A',\n  'Salary':          job.salary          || 'Not listed',\n  'Applicants':      job.applicants      || 'N/A',\n  'Posted':          job.postedAt        || 'N/A',\n  'Apply Link':      job.jobUrl          || 'N/A',\n  'Recruiter':       job.recruiterName   || 'N/A',\n  'Recruiter URL':   job.recruiterUrl    || 'N/A',\n  'Job ID':          job.jobId           || 'N/A',\n  'Scraped On':      new Date().toISOString().split('T')[0]\n}));\n\nreturn rows.map(r => ({ json: r }));"
+      },
+      "id": "9c3003a9-15ed-476f-966e-33aa31bcddc5",
+      "name": "📊 Prepare Excel Data1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "toFile",
+        "fileFormat": "xlsx",
+        "options": {
+          "headerRow": true,
+          "sheetName": "Job Results"
+        }
+      },
+      "id": "81ed640c-9313-46b8-8a8b-9086667686b2",
+      "name": "📁 Create Excel File1",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "typeVersion": 2,
+      "position": [
+        1008,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/botYOUR_TELEGRAM_BOT_TOKEN/sendDocument",
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "chat_id",
+              "value": "={{ $('🧠 Master Handler').item.json.chatId }}"
+            },
+            {
+              "name": "caption",
+              "value": "=Your Job Results are Ready!\n\n{{ $('🧠 Master Handler').item.json.results?.length || 0 }} jobs scraped from LinkedIn.\n\nType /search to start a new search!"
+            },
+            {
+              "parameterType": "formBinaryData",
+              "name": "document",
+              "inputDataFieldName": "data"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "4e090bb9-0b84-4442-9682-fb73adef0fca",
+      "name": "📨 Send Excel to User1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1232,
+        976
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jobfindr-apify-done",
+        "options": {}
+      },
+      "id": "b264f3df-d90c-4d24-bfe8-beec83fb6606",
+      "name": "🔗 Apify Callback Webhook1",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -112,
+        1296
+      ],
+      "webhookId": "jobfindr-apify-done"
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst body  = $json.body || $json;\nconst query = $json.query || {};\n\nconsole.log('Full body:', JSON.stringify(body));\nconsole.log('Query params:', JSON.stringify(query));\n\nconst runId  = body.eventData?.actorRunId\n            || body.resource?.id\n            || body.data?.id;\n\nconst status = body.eventType || body.status || '';\n\n// chatId comes from URL query param — much more reliable than staticData\nconst chatId = query.chatId\n            || body.chatId\n            || staticData.runToChat?.[runId];\n\nconsole.log('runId:', runId);\nconsole.log('chatId:', chatId);\nconsole.log('status:', status);\n\nif (!chatId) {\n  return [{ json: { error: 'No chatId found', runId, query, body } }];\n}\n\nconst failed = status.includes('FAILED');\nreturn [{ json: {\n  chatId,\n  runId,\n  failed,\n  errorText: failed ? 'Sorry, the scrape failed. Please try /search again.' : null\n} }];"
+      },
+      "id": "79bba6bf-82f9-4458-adf7-e05d6793e02c",
+      "name": "🔔 Handle Apify Callback1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        1296
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "failed-check",
+              "leftValue": "={{ $json.failed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1b581471-af53-4da8-a098-e896cca8487a",
+      "name": "❓ Apify Failed?1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        336,
+        1296
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const BOT_TOKEN = 'YOUR_TELEGRAM_BOT_TOKEN';\n\nawait this.helpers.httpRequest({\n  method: 'POST',\n  url: 'https://api.telegram.org/bot' + BOT_TOKEN + '/sendMessage',\n  body: {\n    chat_id: String($json.chatId),\n    text: $json.errorText\n  },\n  json: true\n});\n\nreturn [{ json: { sent: true } }];"
+      },
+      "id": "0a0caf26-debd-47b2-819a-c17998e3847f",
+      "name": "❌ Send Failure Message1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        1200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst allItems   = $input.all();\n\n// Get runId from the webhook — it was stored in Handle Apify Callback\n// We stored chatId against runId in pendingDelivery inside Fetch node\n// Find the first item that has a runId, or get it from pendingDelivery keys\nconst pendingDelivery = staticData.pendingDelivery || {};\nconst pendingKeys     = Object.keys(pendingDelivery);\nconst runId           = pendingKeys[pendingKeys.length - 1];\nconst chatId          = pendingDelivery[runId];\n\nconsole.log('runId:', runId);\nconsole.log('chatId:', chatId);\nconsole.log('Total items:', allItems.length);\n\nif (!chatId) {\n  return [{ json: { error: 'No chatId', pendingDelivery, itemCount: allItems.length } }];\n}\n\n// Clean up pendingDelivery entry\ndelete staticData.pendingDelivery[runId];\n\nconst seen    = new Set();\nconst results = allItems\n  .map(i => i.json)\n  .filter(job => job && job.jobTitle)\n  .map(job => ({\n    title:           job.jobTitle,\n    company:         job.companyName,\n    location:        job.location,\n    salary:          job.salaryInfo        || null,\n    jobUrl:          job.jobUrl            || job.applyUrl,\n    postedAt:        job.publishedAt       || job.postedTime,\n    employmentType:  job.contractType,\n    experienceLevel: job.experienceLevel,\n    workType:        job.workType,\n    applicants:      job.applicationsCount || null,\n    description:     job.jobDescription\n      ? job.jobDescription.substring(0, 300)\n      : null,\n    recruiterName:   job.posterFullName    || null,\n    recruiterUrl:    job.posterProfileUrl  || null,\n    jobId:           job.jobId\n  }))\n  .filter(job => {\n    if (!job.jobUrl || seen.has(job.jobUrl)) return false;\n    seen.add(job.jobUrl);\n    return true;\n  });\n\nif (!staticData.results) staticData.results = {};\nstaticData.results[chatId] = results;\nif (staticData.scrapeJobs) delete staticData.scrapeJobs[chatId];\n\nconsole.log('Stored', results.length, 'results for chatId:', chatId);\n\nreturn [{ json: { chatId, runId, resultCount: results.length } }];"
+      },
+      "id": "af0643d2-fc7a-49a6-ba72-95f4fc57116d",
+      "name": "⚙️ Process & Store Results1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        784,
+        1392
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst chatId = $json.chatId;\nconst runId  = $json.runId;\nconst APIFY_TOKEN = 'YOUR_APIFY_API_TOKEN';\n\nconsole.log('Fetching results for chatId:', chatId, 'runId:', runId);\n\n// Store chatId so Process & Store Results can find it\nif (!staticData.pendingDelivery) staticData.pendingDelivery = {};\nstaticData.pendingDelivery[runId] = chatId;\n\nconst response = await this.helpers.httpRequest({\n  method: 'GET',\n  url: 'https://api.apify.com/v2/actor-runs/' + runId + '/dataset/items?token=' + APIFY_TOKEN + '&limit=100&clean=true',\n  json: true\n});\n\nconst items = Array.isArray(response) ? response : [];\n\nconsole.log('Total items fetched:', items.length);\n\nif (items.length === 0) {\n  return [{ json: { chatId, runId, noResults: true } }];\n}\n\nreturn items.map(item => ({ json: item }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        560,
+        1392
+      ],
+      "id": "e36a671d-ded2-43fc-87e6-1682ed31b1e8",
+      "name": "📥 Fetch Apify Results"
+    },
+    {
+      "parameters": {
+        "jsCode": "// ============================================================\n// JOBFINDR — STATELESS MASTER HANDLER\n// ============================================================\n// HOW THIS WORKS:\n// Instead of storing conversation state in n8n (which causes\n// race conditions and repeated messages), ALL accumulated\n// answers are encoded inside each button's callback_data.\n// When a user taps a button, we decode their full history\n// from the button data itself. No shared state, no races.\n//\n// callback_data format: STEP~jobIdx~typeCode~locIdx~expIdx~salIdx\n// Example: S~0~F~3~1~2 means:\n//   Step=Salary, job=0(SoftwareEng), type=F(FullTime),\n//   loc=3(Nigeria), exp=1(MidLevel), sal=2(60-100K)\n//\n// Special indices: 99 = user typed custom text (stored briefly\n// in staticData only for that single exchange)\n// ============================================================\n\nconst staticData = $getWorkflowStaticData('global');\n// staticData is ONLY used for:\n// 1. awaitingCustom[chatId] — flag: waiting for typed text\n// 2. customJob[chatId]      — stores custom job text briefly\n// 3. customLoc[chatId]      — stores custom location briefly\n// 4. scrapeJobs[chatId]     — tracks active Apify runs\n// 5. results[chatId]        — stores scrape results for delivery\nif (!staticData.awaitingCustom) staticData.awaitingCustom = {};\nif (!staticData.customJob) staticData.customJob = {};\nif (!staticData.customLoc) staticData.customLoc = {};\nif (!staticData.scrapeJobs) staticData.scrapeJobs = {};\nif (!staticData.results) staticData.results = {};\n\n// ── Parse incoming update ────────────────────────────────────\nconst raw = $json.body || $json;\nconst isCallback = !!(raw.callback_query);\nconst msg = raw.message || {};\nconst cbq = raw.callback_query || {};\n\nconst chatId = String(\n  isCallback ? (cbq.message?.chat?.id || cbq.from?.id) : (msg.chat?.id || '')\n);\nconst messageText = isCallback ? (cbq.data || '') : (msg.text || '').trim();\nconst callbackQueryId = isCallback ? cbq.id : null;\nconst username = isCallback\n  ? (cbq.from?.first_name || 'there')\n  : (msg.from?.first_name || 'there');\n\nif (!chatId) {\n  return [{ json: { skip: true } }];\n}\n\n// ── Lookup tables ────────────────────────────────────────────\nconst JOB_ROLES = [\n  'Software Engineer',   // 0\n  'Data Analyst',        // 1\n  'UX/UI Designer',      // 2\n  'Product Manager',     // 3\n  'DevOps Engineer',     // 4\n  'Business Analyst',    // 5\n  'AI/ML Engineer',      // 6\n  'Mobile Developer',    // 7\n  'Cybersecurity Analyst', // 8\n  'Marketing Manager'    // 9\n];\nconst JOB_EMOJIS = ['💻','📊','🎨','📈','🔧','💼','🤖','📱','🔒','📣'];\nconst JOB_TYPES  = { F:'Full-Time', P:'Part-Time', C:'Contract', I:'Internship', A:'Any' };\nconst LOCATIONS  = ['Remote','United Kingdom','United States','Nigeria','Germany','Canada'];\nconst LOC_FLAGS  = ['🌍','🇬🇧','🇺🇸','🇳🇬','🇩🇪','🇨🇦'];\nconst EXP_LEVELS = ['Entry Level','Mid-Senior Level','Senior Level','Director / Executive','Internship','Any'];\nconst SALARIES   = ['Under $30K / £25K','$30K-60K / £25K-50K','$60K-100K / £50K-80K','$100K+ / £80K+','No Preference'];\n\n// ── Resolvers: index → human-readable text ───────────────────\nconst resolveJob = (j) => j === '99'\n  ? (staticData.customJob[chatId] || 'Custom Role')\n  : (JOB_ROLES[parseInt(j)] || j);\n\nconst resolveType = (t) => JOB_TYPES[t] || 'Any';\n\nconst resolveLoc = (l) => l === '99'\n  ? (staticData.customLoc[chatId] || 'Custom Location')\n  : (LOCATIONS[parseInt(l)] || l);\n\nconst resolveExp = (e) => EXP_LEVELS[parseInt(e)] || 'Any';\nconst resolveSal = (s) => SALARIES[parseInt(s)] || 'No Preference';\n\n// ── Keyboard builders ────────────────────────────────────────\n// Each button encodes the FULL state needed to reach the next step.\n// This means a button tap carries its own context — no stored state needed.\n\nconst jobKeyboard = () => ({\n  inline_keyboard: [\n    ...JOB_ROLES.map((r, i) => [{ text: JOB_EMOJIS[i] + ' ' + r, callback_data: 'J~' + i }]),\n    [{ text: '✍️ Other — Type it!', callback_data: 'J~X' }]\n  ]\n});\n\n// After picking job j, show type options — each carries j forward\nconst typeKeyboard = (j) => ({\n  inline_keyboard: [\n    [\n      { text: '🕐 Full-Time', callback_data: 'T~'+j+'~F' },\n      { text: '⏰ Part-Time', callback_data: 'T~'+j+'~P' }\n    ],\n    [\n      { text: '📝 Contract',  callback_data: 'T~'+j+'~C' },\n      { text: '🎓 Internship', callback_data: 'T~'+j+'~I' }\n    ],\n    [{ text: '🔄 Any Type', callback_data: 'T~'+j+'~A' }]\n  ]\n});\n\n// After picking type, show location — each carries j+t forward\nconst locationKeyboard = (j, t) => ({\n  inline_keyboard: [\n    [\n      { text: '🌍 Remote',         callback_data: 'L~'+j+'~'+t+'~0' },\n      { text: '🇬🇧 United Kingdom', callback_data: 'L~'+j+'~'+t+'~1' }\n    ],\n    [\n      { text: '🇺🇸 United States', callback_data: 'L~'+j+'~'+t+'~2' },\n      { text: '🇳🇬 Nigeria',       callback_data: 'L~'+j+'~'+t+'~3' }\n    ],\n    [\n      { text: '🇩🇪 Germany', callback_data: 'L~'+j+'~'+t+'~4' },\n      { text: '🇨🇦 Canada',  callback_data: 'L~'+j+'~'+t+'~5' }\n    ],\n    [{ text: '✏️ Type a location', callback_data: 'L~'+j+'~'+t+'~X' }]\n  ]\n});\n\n// After picking location, show experience — each carries j+t+l forward\nconst expKeyboard = (j, t, l) => ({\n  inline_keyboard: [\n    [{ text: '🌱 Entry Level (0-2 yrs)',  callback_data: 'E~'+j+'~'+t+'~'+l+'~0' }],\n    [{ text: '🌿 Mid Level (2-5 yrs)',    callback_data: 'E~'+j+'~'+t+'~'+l+'~1' }],\n    [{ text: '🌳 Senior Level (5+ yrs)',  callback_data: 'E~'+j+'~'+t+'~'+l+'~2' }],\n    [{ text: '👔 Director / Executive',  callback_data: 'E~'+j+'~'+t+'~'+l+'~3' }],\n    [{ text: '🎓 Internship Level',       callback_data: 'E~'+j+'~'+t+'~'+l+'~4' }],\n    [{ text: '🔄 Any Level',             callback_data: 'E~'+j+'~'+t+'~'+l+'~5' }]\n  ]\n});\n\n// After picking experience, show salary — each carries j+t+l+e forward\nconst salaryKeyboard = (j, t, l, e) => ({\n  inline_keyboard: [\n    [{ text: '💰 Under $30K / £25K',    callback_data: 'S~'+j+'~'+t+'~'+l+'~'+e+'~0' }],\n    [{ text: '💰 $30K-60K / £25K-50K', callback_data: 'S~'+j+'~'+t+'~'+l+'~'+e+'~1' }],\n    [{ text: '💰 $60K-100K / £50K-80K',callback_data: 'S~'+j+'~'+t+'~'+l+'~'+e+'~2' }],\n    [{ text: '💰 $100K+ / £80K+',      callback_data: 'S~'+j+'~'+t+'~'+l+'~'+e+'~3' }],\n    [{ text: '🚫 No Preference',        callback_data: 'S~'+j+'~'+t+'~'+l+'~'+e+'~4' }]\n  ]\n});\n\n// After picking salary, show confirmation — carries everything forward\nconst confirmKeyboard = (j, t, l, e, s) => ({\n  inline_keyboard: [\n    [{ text: '🚀 Yes, Find My Jobs!', callback_data: 'CONFIRM~'+j+'~'+t+'~'+l+'~'+e+'~'+s }],\n    [{ text: '✏️ Start Over',         callback_data: 'RESTART' }]\n  ]\n});\n\nconst deliveryKeyboard = () => ({\n  inline_keyboard: [\n    [{ text: '📊 Excel Spreadsheet (.xlsx)', callback_data: 'DEL~excel' }],\n    [{ text: '📋 Text Summary in Chat',      callback_data: 'DEL~text'  }],\n    [{ text: '🔥 Both! (Preview + Excel)',   callback_data: 'DEL~both'  }]\n  ]\n});\n\n// ── Main response logic ──────────────────────────────────────\nlet responseText = '';\nlet keyboard     = null;\nlet startApify   = false;\nlet apifyPayload = null;\nlet sendFile     = false;\nlet deliveryType = null;\n\n// ── Commands ─────────────────────────────────────────────────\nif (messageText === '/start' || messageText === '/search') {\n  delete staticData.awaitingCustom[chatId];\n  responseText = 'Welcome to JobFindr, ' + username + '!\\n\\n🔍 What job are you looking for today?';\n  keyboard = jobKeyboard();\n\n} else if (messageText === '/status') {\n  const job = staticData.scrapeJobs[chatId];\n  responseText = job\n    ? '⏳ Scrape in progress!\\nSearching: ' + job.role + ' in ' + job.location + '\\n\\nI will message you the moment results are ready.'\n    : '✅ No active scrape. Use /search to start one!';\n\n} else if (messageText === '/help') {\n  responseText = '🆘 JobFindr Help\\n\\n/start — New search\\n/search — New search\\n/status — Check active scrape\\n/help — This message';\n\n// ── Callback: user tapped a button ───────────────────────────\n} else if (isCallback) {\n  const parts = messageText.split('~');\n  const step  = parts[0];\n\n  // Decode state from callback_data\n  const j = parts[1]; // job index\n  const t = parts[2]; // type code\n  const l = parts[3]; // location index\n  const e = parts[4]; // experience index\n  const s = parts[5]; // salary index\n\n  switch (step) {\n\n    case 'J': // User picked a job role\n      if (j === 'X') {\n        // User wants to type their own job — set a waiting flag\n        staticData.awaitingCustom[chatId] = { type: 'JOB' };\n        responseText = '✏️ Type the exact job title you are looking for:';\n        // No keyboard — waiting for text\n      } else {\n        const jobName = resolveJob(j);\n        responseText = '✅ ' + jobName + '\\n\\n⏰ What type of role?';\n        keyboard = typeKeyboard(j);\n      }\n      break;\n\n    case 'T': // User picked a job type\n      responseText = '✅ ' + resolveType(t) + '\\n\\n📍 Where would you like to work?';\n      keyboard = locationKeyboard(j, t);\n      break;\n\n    case 'L': // User picked a location\n      if (l === 'X') {\n        // User wants to type their own location\n        staticData.awaitingCustom[chatId] = { type: 'LOC', j, t };\n        responseText = '✏️ Type your preferred location (city, country, or Remote):';\n        // No keyboard — waiting for text\n      } else {\n        responseText = '✅ ' + resolveLoc(l) + '\\n\\n🎯 What is your experience level?';\n        keyboard = expKeyboard(j, t, l);\n      }\n      break;\n\n    case 'E': // User picked experience level\n      responseText = '✅ ' + resolveExp(e) + '\\n\\n💰 Any salary preference?';\n      keyboard = salaryKeyboard(j, t, l, e);\n      break;\n\n    case 'S': // User picked salary — show summary\n      const sumJob = resolveJob(j);\n      const sumTyp = resolveType(t);\n      const sumLoc = resolveLoc(l);\n      const sumExp = resolveExp(e);\n      const sumSal = resolveSal(s);\n      responseText =\n        '📋 Here is your search summary:\\n\\n' +\n        '🔍 Role: ' + sumJob + '\\n' +\n        '⏰ Type: ' + sumTyp + '\\n' +\n        '📍 Location: ' + sumLoc + '\\n' +\n        '🎯 Experience: ' + sumExp + '\\n' +\n        '💰 Salary: ' + sumSal + '\\n\\n' +\n        'Ready to search LinkedIn?';\n      keyboard = confirmKeyboard(j, t, l, e, s);\n      break;\n\n    case 'CONFIRM': // User confirmed — fire Apify\n      const cfJob = resolveJob(j);\n      const cfTyp = resolveType(t);\n      const cfLoc = resolveLoc(l);\n      const cfExp = resolveExp(e);\n      const cfSal = resolveSal(s);\n      responseText =\n        '⏳ Brilliant! Firing up the LinkedIn scraper now...\\n\\n' +\n        '🔍 Searching: ' + cfJob + ' in ' + cfLoc + '\\n' +\n        '⏰ Type: ' + cfTyp + ' | 🎯 Level: ' + cfExp + '\\n\\n' +\n        '☕ This takes about 5-10 minutes.\\n' +\n        'I will ping you the moment your results are ready!';\n      startApify = true;\n      apifyPayload = { jobRole: cfJob, jobType: cfTyp, location: cfLoc, experience: cfExp, salaryRange: cfSal, chatId };\n      // Store active scrape reference\n      staticData.scrapeJobs[chatId] = { role: cfJob, location: cfLoc };\n      // Clean up custom text refs\n      delete staticData.customJob[chatId];\n      delete staticData.customLoc[chatId];\n      break;\n\n    case 'RESTART':\n      delete staticData.awaitingCustom[chatId];\n      responseText = '🔄 No worries! What job are you looking for?';\n      keyboard = jobKeyboard();\n      break;\n\n    case 'DEL': // Delivery choice\n      const format = parts[1]; // excel / text / both\n      const res = staticData.results[chatId] || [];\n      deliveryType = format;\n\n      if (format === 'excel' || format === 'both') {\n        sendFile = true;\n      }\n\n      if (format === 'text' || format === 'both') {\n        const top10 = res.slice(0, 10).map((job, i) =>\n          (i+1) + '. ' + (job.title || 'Unknown') +\n          '\\n   ' + (job.company || '?') + ' | ' + (job.location || '?') +\n          '\\n   ' + (job.jobUrl || job.applyUrl || 'No link')\n        ).join('\\n\\n');\n        responseText = '📋 Top ' + Math.min(10, res.length) + ' ' + (staticData.scrapeJobs[chatId]?.role || '') + ' Jobs:\\n\\n' + top10 + '\\n\\n_Showing ' + Math.min(10, res.length) + ' of ' + res.length + ' total_\\n\\nType /search to start a new search!';\n      } else {\n        responseText = '📊 Preparing your Excel file with ' + res.length + ' jobs... almost there!';\n      }\n      break;\n\n    default:\n      responseText = '👋 Welcome to JobFindr, ' + username + '! What job are you looking for today?';\n      keyboard = jobKeyboard();\n  }\n\n// ── Plain text message — could be custom job or location ──────\n} else if (!isCallback && messageText && !messageText.startsWith('/')) {\n  const waiting = staticData.awaitingCustom[chatId];\n\n  if (waiting && waiting.type === 'JOB') {\n    // User typed a custom job title\n    staticData.customJob[chatId] = messageText;\n    delete staticData.awaitingCustom[chatId];\n    // Use index 99 as placeholder for custom job in all subsequent buttons\n    responseText = '✅ ' + messageText + ' — great choice!\\n\\n⏰ What type of role?';\n    keyboard = typeKeyboard('99');\n\n  } else if (waiting && waiting.type === 'LOC') {\n    // User typed a custom location\n    staticData.customLoc[chatId] = messageText;\n    delete staticData.awaitingCustom[chatId];\n    const { j, t } = waiting;\n    // Use index 99 as placeholder for custom location in all subsequent buttons\n    responseText = '✅ ' + messageText + ' noted.\\n\\n🎯 What is your experience level?';\n    keyboard = expKeyboard(j, t, '99');\n\n  } else {\n    // Unknown plain text — show welcome\n    responseText = '👋 Welcome to JobFindr, ' + username + '! What job are you looking for today?';\n    keyboard = jobKeyboard();\n  }\n\n} else {\n  // Fallback\n  responseText = '👋 Welcome to JobFindr, ' + username + '! What job are you looking for today?';\n  keyboard = jobKeyboard();\n}\n\n// Safety net — never send empty text\nif (!responseText || responseText.trim() === '') {\n  responseText = '👋 Welcome to JobFindr, ' + username + '! What job are you looking for today?';\n  keyboard = jobKeyboard();\n}\n\nreturn [{ json: {\n  chatId,\n  callbackQueryId,\n  text: responseText,\n  keyboard,\n  startApify,\n  apifyPayload,\n  sendFile,\n  deliveryType,\n  results: staticData.results[chatId] || []\n} }];"
+      },
+      "id": "a23d0e85-9bdb-4d7f-abf1-252efab4b34c",
+      "name": "🧠 Master Handler",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        112,
+        688
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const staticData = $getWorkflowStaticData('global');\nconst runId = $json.data?.id || $json.id;\nconst chatId = $json.apifyPayload?.chatId;\n\nif (runId && chatId) {\n  if (!staticData.runToChat) staticData.runToChat = {};\n  staticData.runToChat[runId] = chatId;\n}\n\nreturn [{ json: { stored: true, runId, chatId } }];"
+      },
+      "id": "6c0f99e7-d850-462a-8a72-113bc6d9de9c",
+      "name": "💾 Store Run ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1232,
+        784
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "📩 Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "🧠 Master Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Valid Message?": {
+      "main": [
+        [
+          {
+            "node": "📤 Send Message",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🔀 Is Callback?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🔀 Start Apify?1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "🔀 Send File?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Is Callback?": {
+      "main": [
+        [
+          {
+            "node": "✅ Answer Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Start Apify?1": {
+      "main": [
+        [
+          {
+            "node": "📋 Prepare Apify Input1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📋 Prepare Apify Input1": {
+      "main": [
+        [
+          {
+            "node": "🚀 Start Apify Run1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🚀 Start Apify Run1": {
+      "main": [
+        [
+          {
+            "node": "💾 Store Run ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔀 Send File?1": {
+      "main": [
+        [
+          {
+            "node": "📊 Prepare Excel Data1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📊 Prepare Excel Data1": {
+      "main": [
+        [
+          {
+            "node": "📁 Create Excel File1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📁 Create Excel File1": {
+      "main": [
+        [
+          {
+            "node": "📨 Send Excel to User1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔗 Apify Callback Webhook1": {
+      "main": [
+        [
+          {
+            "node": "🔔 Handle Apify Callback1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🔔 Handle Apify Callback1": {
+      "main": [
+        [
+          {
+            "node": "❓ Apify Failed?1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "❓ Apify Failed?1": {
+      "main": [
+        [
+          {
+            "node": "❌ Send Failure Message1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "📥 Fetch Apify Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⚙️ Process & Store Results1": {
+      "main": [
+        [
+          {
+            "node": "🎉 Notify — Results Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "📥 Fetch Apify Results": {
+      "main": [
+        [
+          {
+            "node": "⚙️ Process & Store Results1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "🧠 Master Handler": {
+      "main": [
+        [
+          {
+            "node": "🔀 Valid Message?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "YOUR_VERSION_ID",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "YOUR_N8N_INSTANCE_ID"
+  },
+  "id": "YOUR_WORKFLOW_ID",
+  "tags": []
+}
